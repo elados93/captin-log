@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>יומן מסחר</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #273449;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #eab308;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", "Arial", "Noto Sans Hebrew", sans-serif;
+    font-size: 14px;
+  }
+  .container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+  }
+  h1 {
+    font-size: 28px;
+    margin: 0 0 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin-bottom: 24px;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  button, .file-label {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  button:hover, .file-label:hover {
+    background: #334155;
+    border-color: var(--accent);
+  }
+  button.primary {
+    background: var(--accent);
+    color: #0f172a;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  button.primary:hover {
+    background: #7dd3fc;
+    border-color: #7dd3fc;
+  }
+  input[type="file"] { display: none; }
+  .section {
+    margin-bottom: 32px;
+  }
+  .section-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 12px;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .stat-card .label {
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-size: 22px;
+    font-weight: 600;
+  }
+  .stat-card .sub {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  .currency-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .currency-card .currency-name {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .currency-card .pnl {
+    font-size: 24px;
+    font-weight: 700;
+  }
+  .currency-card .pnl-pct {
+    font-size: 14px;
+    margin-top: 2px;
+  }
+  .currency-card .meta {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .currency-card .meta strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .neutral { color: var(--muted); }
+
+  .chart-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    height: 320px;
+  }
+  .table-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .table-controls input {
+    flex: 1;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .table-controls input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .table-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: auto;
+    max-height: 480px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--panel-2);
+    color: var(--text);
+    font-weight: 600;
+    text-align: right;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover {
+    background: #334155;
+  }
+  thead th .arrow {
+    color: var(--accent);
+    margin-right: 4px;
+    font-size: 11px;
+  }
+  tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr:hover { background: rgba(56, 189, 248, 0.05); }
+  .empty-state {
+    padding: 48px 16px;
+    text-align: center;
+    color: var(--muted);
+    background: var(--panel);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .page-title {
+    font-size: 32px;
+    margin: 0 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  details.drop-section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  details.drop-section[open] {
+    background: var(--panel);
+  }
+  summary.drop-section-title {
+    cursor: pointer;
+    padding: 16px 20px;
+    font-size: 18px;
+    font-weight: 600;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--panel-2);
+  }
+  summary.drop-section-title::-webkit-details-marker { display: none; }
+  summary.drop-section-title::after {
+    content: '▼';
+    font-size: 11px;
+    color: var(--muted);
+    transition: transform 0.2s;
+  }
+  details.drop-section:not([open]) summary.drop-section-title::after {
+    transform: rotate(90deg);
+  }
+  summary.drop-section-title:hover {
+    background: #334155;
+  }
+  .drop-section-body {
+    padding: 20px;
+  }
+  .drop-section-body > .section:last-child {
+    margin-bottom: 0;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1 class="page-title">יומן הקפיטן ⚓</h1>
+  <div class="subtitle">העלה קובץ אקסל של עסקאות בורסה כדי לקבל סיכום ביצועים</div>
+
+  <div class="toolbar">
+    <button class="primary" id="btnLoadDemo">טען נתוני דמו</button>
+    <label class="file-label" for="fileInput">טען קובץ אקסל</label>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" />
+    <button id="btnClear">נקה</button>
+  </div>
+
+  <div id="content"></div>
+</div>
+
+<script>
+// ============================================================
+// Constants
+// ============================================================
+const ACTION_BUY = 'קניה בבורסה';
+const ACTION_SELL = 'מכירה בבורסה';
+const ACTION_DIV = 'דיבידנד';
+const RELEVANT_ACTIONS = new Set([ACTION_BUY, ACTION_SELL, ACTION_DIV]);
+
+const COL_NAME = 'שם';
+const COL_SYMBOL = 'סימבול';
+const COL_ACTION = 'סוג פעולה';
+const COL_AMOUNT = 'סכום כולל';
+const COL_FEE = 'עמלה';
+const COL_CURRENCY = 'מטבע';
+const COL_DATE = 'תאריך';
+
+const CURRENCY_LABEL = { USD: 'דולר', ILS: 'שקל', EUR: 'יורו' };
+const CURRENCY_SYMBOL = { USD: '$', ILS: '₪', EUR: '€' };
+
+// ============================================================
+// State
+// ============================================================
+let state = {
+  trades: [],
+  dividends: [],
+  rawTransactions: [],
+  tradeSort: { col: 'sellDate', dir: 'desc' },
+  divSort: { col: 'date', dir: 'desc' },
+  tradeFilter: '',
+  divFilter: '',
+  charts: { pnl: null, winRate: null, fees: null },
+};
+
+function destroyCharts() {
+  for (const key of Object.keys(state.charts)) {
+    if (state.charts[key]) { state.charts[key].destroy(); state.charts[key] = null; }
+  }
+}
+
+// ============================================================
+// Demo data generator
+// ============================================================
+const DEMO_STOCKS = [
+  { symbol: 'AAPL', name: 'APPLE INC', currency: 'USD' },
+  { symbol: 'MSFT', name: 'MICROSOFT CORP', currency: 'USD' },
+  { symbol: 'GOOGL', name: 'ALPHABET INC', currency: 'USD' },
+  { symbol: 'AMZN', name: 'AMAZON COM INC', currency: 'USD' },
+  { symbol: 'NVDA', name: 'NVIDIA CORP', currency: 'USD' },
+  { symbol: 'META', name: 'META PLATFORMS', currency: 'USD' },
+  { symbol: 'TSLA', name: 'TESLA INC', currency: 'USD' },
+  { symbol: 'JPM', name: 'JPMORGAN CHASE', currency: 'USD' },
+  { symbol: 'V', name: 'VISA INC', currency: 'USD' },
+  { symbol: 'TEVA', name: 'טבע תעשיות', currency: 'ILS' },
+  { symbol: 'POLI', name: 'בנק הפועלים', currency: 'ILS' },
+  { symbol: 'LUMI', name: 'בנק לאומי', currency: 'ILS' },
+  { symbol: 'NICE', name: 'נייס', currency: 'ILS' },
+  { symbol: 'ESLT', name: 'אלביט מערכות', currency: 'ILS' },
+  { symbol: 'SAP', name: 'SAP SE', currency: 'EUR' },
+  { symbol: 'ASML', name: 'ASML HOLDING', currency: 'EUR' },
+  { symbol: 'BMW', name: 'BMW AG', currency: 'EUR' },
+  { symbol: 'AIR', name: 'AIRBUS SE', currency: 'EUR' },
+];
+
+function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function randFloat(min, max) { return Math.random() * (max - min) + min; }
+function randomDate(start, end) {
+  return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+}
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function generateDemoData(numTrades = 25) {
+  const transactions = [];
+  const startDate = new Date('2024-01-01');
+  const endDate = new Date('2026-04-01');
+
+  for (let i = 0; i < numTrades; i++) {
+    const stock = pick(DEMO_STOCKS);
+    const buyDate = randomDate(startDate, endDate);
+    const holdDays = randInt(1, 400);
+    const sellDate = new Date(buyDate.getTime() + holdDays * 86400000);
+
+    const baseAmount = stock.currency === 'ILS' ? randFloat(2000, 30000) : randFloat(800, 8000);
+    const buyAmount = Math.round(baseAmount * 100) / 100;
+    // -35% to +50% return, biased slightly positive
+    const returnPct = randFloat(-0.35, 0.5);
+    const sellAmount = Math.round(buyAmount * (1 + returnPct) * 100) / 100;
+
+    const buyFee = Math.round((buyAmount * 0.0015 + (stock.currency === 'ILS' ? 8 : 2)) * 100) / 100;
+    const sellFee = Math.round((sellAmount * 0.0015 + (stock.currency === 'ILS' ? 8 : 2)) * 100) / 100;
+
+    transactions.push({
+      [COL_NAME]: stock.name,
+      [COL_SYMBOL]: stock.symbol,
+      [COL_ACTION]: ACTION_BUY,
+      [COL_AMOUNT]: buyAmount,
+      [COL_FEE]: buyFee,
+      [COL_CURRENCY]: stock.currency,
+      [COL_DATE]: buyDate,
+    });
+    transactions.push({
+      [COL_NAME]: stock.name,
+      [COL_SYMBOL]: stock.symbol,
+      [COL_ACTION]: ACTION_SELL,
+      [COL_AMOUNT]: sellAmount,
+      [COL_FEE]: sellFee,
+      [COL_CURRENCY]: stock.currency,
+      [COL_DATE]: sellDate,
+    });
+  }
+
+  // Add some dividends
+  const numDividends = Math.max(3, Math.floor(numTrades / 4));
+  for (let i = 0; i < numDividends; i++) {
+    const stock = pick(DEMO_STOCKS);
+    transactions.push({
+      [COL_NAME]: stock.name,
+      [COL_SYMBOL]: stock.symbol,
+      [COL_ACTION]: ACTION_DIV,
+      [COL_AMOUNT]: Math.round(randFloat(20, 400) * 100) / 100,
+      [COL_FEE]: 0,
+      [COL_CURRENCY]: stock.currency,
+      [COL_DATE]: randomDate(startDate, endDate),
+    });
+  }
+
+  // Add a few noise rows that should be ignored
+  transactions.push({
+    [COL_NAME]: 'עו"ש מט"י',
+    [COL_SYMBOL]: '',
+    [COL_ACTION]: 'התקבל מח.בסניף',
+    [COL_AMOUNT]: 5000,
+    [COL_FEE]: 0,
+    [COL_CURRENCY]: 'ILS',
+    [COL_DATE]: randomDate(startDate, endDate),
+  });
+
+  return transactions;
+}
+
+// ============================================================
+// Excel parsing
+// ============================================================
+function parseDate(v) {
+  if (v instanceof Date) return v;
+  if (typeof v === 'number') {
+    // Excel serial date
+    const epoch = new Date(Date.UTC(1899, 11, 30));
+    return new Date(epoch.getTime() + v * 86400000);
+  }
+  if (typeof v === 'string') {
+    const s = v.trim();
+    // dd/mm/yyyy or dd-mm-yyyy
+    let m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+    if (m) {
+      let [, d, mo, y] = m;
+      y = y.length === 2 ? '20' + y : y;
+      return new Date(parseInt(y, 10), parseInt(mo, 10) - 1, parseInt(d, 10));
+    }
+    const t = Date.parse(s);
+    if (!isNaN(t)) return new Date(t);
+  }
+  return null;
+}
+
+function parseNumber(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    const cleaned = v.replace(/[,\s₪$€]/g, '').trim();
+    if (cleaned === '') return 0;
+    const n = parseFloat(cleaned);
+    return isNaN(n) ? 0 : n;
+  }
+  return 0;
+}
+
+async function loadXlsxFile(file) {
+  const data = await file.arrayBuffer();
+  const wb = XLSX.read(data, { cellDates: true });
+  const sheetName = wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false, dateNF: 'dd/mm/yyyy' });
+  // sheet_to_json with raw:false converts dates to strings; redo with raw:true to keep Date objects
+  const rowsRaw = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
+  return rowsRaw;
+}
+
+// ============================================================
+// Trade computation
+// ============================================================
+function computeTrades(transactions) {
+  // Normalize and filter
+  const actionOrder = { [ACTION_BUY]: 0, [ACTION_DIV]: 1, [ACTION_SELL]: 2 };
+  const txs = transactions
+    .map((row) => ({
+      name: String(row[COL_NAME] ?? '').trim(),
+      symbol: String(row[COL_SYMBOL] ?? '').trim(),
+      action: String(row[COL_ACTION] ?? '').trim(),
+      amount: Math.abs(parseNumber(row[COL_AMOUNT])),
+      fee: Math.abs(parseNumber(row[COL_FEE])),
+      currency: String(row[COL_CURRENCY] ?? '').trim().toUpperCase(),
+      date: parseDate(row[COL_DATE]),
+    }))
+    .filter((t) => RELEVANT_ACTIONS.has(t.action) && t.date)
+    .sort((a, b) => (a.date - b.date) || (actionOrder[a.action] - actionOrder[b.action]));
+
+  const positions = new Map(); // key -> queue of buys
+  const trades = [];
+  const dividends = [];
+
+  for (const t of txs) {
+    const ticker = t.symbol || t.name || '?';
+    const key = ticker + '|' + t.currency;
+
+    if (t.action === ACTION_BUY) {
+      if (!positions.has(key)) positions.set(key, []);
+      positions.get(key).push(t);
+    } else if (t.action === ACTION_SELL) {
+      const queue = positions.get(key);
+      if (queue && queue.length > 0) {
+        const buy = queue.shift();
+        const grossPL = t.amount - buy.amount;
+        const netPL = grossPL - buy.fee - t.fee;
+        const durationMs = t.date - buy.date;
+        const durationDays = Math.max(0, Math.round(durationMs / 86400000));
+        trades.push({
+          ticker,
+          name: t.name || buy.name,
+          currency: t.currency || buy.currency,
+          buyDate: buy.date,
+          sellDate: t.date,
+          durationDays,
+          buyAmount: buy.amount,
+          sellAmount: t.amount,
+          buyFee: buy.fee,
+          sellFee: t.fee,
+          totalFee: buy.fee + t.fee,
+          grossPL,
+          netPL,
+          netPLPct: buy.amount > 0 ? (netPL / buy.amount) * 100 : 0,
+        });
+      }
+      // sell with no matching buy: ignored
+    } else if (t.action === ACTION_DIV) {
+      dividends.push({
+        ticker,
+        name: t.name,
+        currency: t.currency,
+        date: t.date,
+        amount: t.amount,
+      });
+    }
+  }
+
+  return { trades, dividends, transactions: txs };
+}
+
+// ============================================================
+// Formatting
+// ============================================================
+function fmtNumber(n, digits = 2) {
+  if (n == null || isNaN(n)) return '-';
+  return n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+function fmtMoney(n, currency) {
+  const sym = CURRENCY_SYMBOL[currency] || '';
+  return (n < 0 ? '-' : '') + sym + fmtNumber(Math.abs(n));
+}
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return '-';
+  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+}
+function fmtDate(d) {
+  if (!(d instanceof Date) || isNaN(d)) return '-';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+}
+function plClass(n) {
+  if (n > 0) return 'pos';
+  if (n < 0) return 'neg';
+  return 'neutral';
+}
+
+// ============================================================
+// Rendering
+// ============================================================
+function render() {
+  const root = document.getElementById('content');
+  if (state.trades.length === 0 && state.dividends.length === 0) {
+    root.innerHTML = `<div class="empty-state">אין נתונים. טען נתוני דמו או קובץ אקסל כדי להתחיל.</div>`;
+    return;
+  }
+
+  // Aggregate per currency
+  const currencies = new Map();
+  for (const t of state.trades) {
+    if (!currencies.has(t.currency)) {
+      currencies.set(t.currency, { invested: 0, netPL: 0, fees: 0, count: 0, wins: 0, dividends: 0 });
+    }
+    const c = currencies.get(t.currency);
+    c.invested += t.buyAmount;
+    c.netPL += t.netPL;
+    c.fees += t.totalFee;
+    c.count += 1;
+    if (t.netPL > 0) c.wins += 1;
+  }
+  for (const d of state.dividends) {
+    if (!currencies.has(d.currency)) {
+      currencies.set(d.currency, { invested: 0, netPL: 0, fees: 0, count: 0, wins: 0, dividends: 0 });
+    }
+    currencies.get(d.currency).dividends += d.amount;
+  }
+
+  const totalTrades = state.trades.length;
+  const totalWins = state.trades.filter((t) => t.netPL > 0).length;
+  const winRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
+
+  // Order currencies by support order
+  const orderedCurrencies = ['USD', 'ILS', 'EUR'].filter((c) => currencies.has(c));
+  for (const c of currencies.keys()) {
+    if (!orderedCurrencies.includes(c)) orderedCurrencies.push(c);
+  }
+
+  // Dividend totals per currency
+  const dividendTotals = orderedCurrencies
+    .map((c) => ({ c, total: currencies.get(c).dividends }))
+    .filter((d) => d.total > 0);
+  const dividendsHtml = dividendTotals.length > 0
+    ? dividendTotals.map((d) => `<span class="${plClass(d.total)}">${fmtMoney(d.total, d.c)}</span>`).join(' · ')
+    : '<span class="neutral">-</span>';
+
+  // Fee totals per currency
+  const feeTotals = orderedCurrencies
+    .map((c) => ({ c, total: currencies.get(c).fees }))
+    .filter((d) => d.total > 0);
+  const feesHtml = feeTotals.length > 0
+    ? feeTotals.map((d) => `<span class="neg">${fmtMoney(d.total, d.c)}</span>`).join(' · ')
+    : '<span class="neutral">-</span>';
+
+  // Trade rate per 30 days, based on span of sell dates
+  let tradeRate = 0;
+  let rateLabel = '-';
+  if (state.trades.length >= 2) {
+    const sellDates = state.trades.map((t) => t.sellDate.getTime());
+    const spanDays = (Math.max(...sellDates) - Math.min(...sellDates)) / 86400000;
+    if (spanDays >= 1) {
+      tradeRate = (state.trades.length / spanDays) * 30;
+      rateLabel = `על פני ${Math.round(spanDays)} ימים`;
+    }
+  } else if (state.trades.length === 1) {
+    rateLabel = 'עסקה בודדת';
+  }
+
+  const winRateColor = totalTrades > 0
+    ? `hsl(${(winRate * 1.2).toFixed(0)}, 80%, 55%)`
+    : 'var(--muted)';
+
+  // Per-currency P/L cards (used inside trades section)
+  let currencyCardsHtml = '<div class="stats-grid">';
+  for (const c of orderedCurrencies) {
+    const data = currencies.get(c);
+    if (!data || data.count === 0) continue;
+    const pct = data.invested > 0 ? (data.netPL / data.invested) * 100 : 0;
+    const label = CURRENCY_LABEL[c] || c;
+    currencyCardsHtml += `<div class="currency-card">
+      <div class="currency-name">${label} <span class="badge">${c}</span></div>
+      <div class="pnl ${plClass(data.netPL)}">${fmtMoney(data.netPL, c)}</div>
+      <div class="pnl-pct ${plClass(data.netPL)}">${fmtPct(pct)}</div>
+      <div class="meta">
+        <span>${data.count} עסקאות</span>
+        <span>סה"כ הושקע: <strong>${fmtMoney(data.invested, c)}</strong></span>
+      </div>
+    </div>`;
+  }
+  currencyCardsHtml += '</div>';
+
+  let html = '';
+
+  // 🏆 Win rate section
+  html += `<details class="drop-section" open>
+    <summary class="drop-section-title">🏆 אחוזי ניצחון</summary>
+    <div class="drop-section-body">
+      <div class="section"><div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">אחוז ניצחון כולל</div>
+          <div class="value" style="color:${winRateColor}">${winRate.toFixed(1)}%</div>
+          <div class="sub">${totalWins} מנצחות מתוך ${totalTrades} עסקאות</div>
+        </div>
+      </div></div>
+      <div class="section">
+        <div class="section-title">אחוז ניצחון לאורך זמן (מצטבר)</div>
+        <div class="chart-wrap"><canvas id="winRateChart"></canvas></div>
+      </div>
+    </div>
+  </details>`;
+
+  // 📈 Trades section
+  html += `<details class="drop-section" open>
+    <summary class="drop-section-title">📈 עסקאות</summary>
+    <div class="drop-section-body">
+      <div class="section"><div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">סה"כ עסקאות סגורות</div>
+          <div class="value">${totalTrades}</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">קצב עסקאות (ל-30 ימים)</div>
+          <div class="value">${tradeRate > 0 ? tradeRate.toFixed(1) : '-'}</div>
+          <div class="sub">${rateLabel}</div>
+        </div>
+      </div></div>
+      <div class="section">
+        <div class="section-title">סיכום לפי מטבע</div>
+        ${currencyCardsHtml}
+      </div>
+      <div class="section">
+        <div class="section-title">רווח/הפסד באחוזים לפי תאריך מכירה</div>
+        <div class="chart-wrap"><canvas id="pnlChart"></canvas></div>
+      </div>
+      <div class="section">
+        <div class="section-title">טבלת עסקאות</div>
+        <div class="table-controls">
+          <input id="tradeFilter" placeholder="סנן לפי כל עמודה..." value="${escapeHtml(state.tradeFilter)}" />
+        </div>
+        <div class="table-wrap" id="tradesTableWrap">${renderTradesTable()}</div>
+      </div>
+    </div>
+  </details>`;
+
+  // 💰 Dividends section
+  html += `<details class="drop-section" open>
+    <summary class="drop-section-title">💰 דיבידנדים</summary>
+    <div class="drop-section-body">
+      <div class="section"><div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">סה"כ דיבידנדים</div>
+          <div class="value" style="font-size:18px;line-height:1.4;">${dividendsHtml}</div>
+          <div class="sub">${state.dividends.length} תשלומים</div>
+        </div>
+      </div></div>
+      <div class="section">
+        <div class="section-title">טבלת דיבידנדים</div>
+        <div class="table-controls">
+          <input id="divFilter" placeholder="סנן לפי כל עמודה..." value="${escapeHtml(state.divFilter)}" />
+        </div>
+        <div class="table-wrap" id="dividendsTableWrap">${renderDividendsTable()}</div>
+      </div>
+    </div>
+  </details>`;
+
+  // 💸 Fees section
+  html += `<details class="drop-section" open>
+    <summary class="drop-section-title">💸 עמלות</summary>
+    <div class="drop-section-body">
+      <div class="section"><div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">סה"כ עמלות ששולמו</div>
+          <div class="value" style="font-size:18px;line-height:1.4;">${feesHtml}</div>
+          <div class="sub">קנייה + מכירה</div>
+        </div>
+      </div></div>
+      <div class="section">
+        <div class="section-title">עמלות מצטברות לאורך זמן</div>
+        <div class="chart-wrap"><canvas id="feesChart"></canvas></div>
+      </div>
+    </div>
+  </details>`;
+
+  root.innerHTML = html;
+
+  // Bind events
+  const tradeFilterEl = document.getElementById('tradeFilter');
+  if (tradeFilterEl) {
+    tradeFilterEl.addEventListener('input', (e) => {
+      state.tradeFilter = e.target.value;
+      document.getElementById('tradesTableWrap').innerHTML = renderTradesTable();
+      bindTradeHeaders();
+    });
+  }
+  const divFilterEl = document.getElementById('divFilter');
+  if (divFilterEl) {
+    divFilterEl.addEventListener('input', (e) => {
+      state.divFilter = e.target.value;
+      document.getElementById('dividendsTableWrap').innerHTML = renderDividendsTable();
+      bindDivHeaders();
+    });
+  }
+  bindTradeHeaders();
+  bindDivHeaders();
+  drawPnLChart();
+  drawWinRateChart();
+  drawFeesChart(orderedCurrencies);
+}
+
+function bindTradeHeaders() {
+  document.querySelectorAll('th[data-trade-col]').forEach((th) => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.tradeCol;
+      if (state.tradeSort.col === col) {
+        state.tradeSort.dir = state.tradeSort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.tradeSort.col = col;
+        state.tradeSort.dir = 'asc';
+      }
+      document.getElementById('tradesTableWrap').innerHTML = renderTradesTable();
+      bindTradeHeaders();
+    });
+  });
+}
+
+function bindDivHeaders() {
+  document.querySelectorAll('th[data-div-col]').forEach((th) => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.divCol;
+      if (state.divSort.col === col) {
+        state.divSort.dir = state.divSort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.divSort.col = col;
+        state.divSort.dir = 'asc';
+      }
+      document.getElementById('dividendsTableWrap').innerHTML = renderDividendsTable();
+      bindDivHeaders();
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+function applyFilter(rows, filter, getValues) {
+  if (!filter) return rows;
+  const q = filter.toLowerCase();
+  return rows.filter((r) => getValues(r).some((v) => String(v).toLowerCase().includes(q)));
+}
+
+function applySort(rows, col, dir, getter) {
+  const factor = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const va = getter(a, col);
+    const vb = getter(b, col);
+    if (va instanceof Date && vb instanceof Date) return (va - vb) * factor;
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * factor;
+    return String(va).localeCompare(String(vb), 'he') * factor;
+  });
+}
+
+function tradeCellValue(t, col) {
+  switch (col) {
+    case 'ticker': return t.ticker;
+    case 'name': return t.name;
+    case 'currency': return t.currency;
+    case 'buyDate': return t.buyDate;
+    case 'sellDate': return t.sellDate;
+    case 'durationDays': return t.durationDays;
+    case 'buyAmount': return t.buyAmount;
+    case 'sellAmount': return t.sellAmount;
+    case 'totalFee': return t.totalFee;
+    case 'netPL': return t.netPL;
+    case 'netPLPct': return t.netPLPct;
+    default: return '';
+  }
+}
+
+function renderTradesTable() {
+  const cols = [
+    { key: 'ticker', label: 'סימבול' },
+    { key: 'name', label: 'שם' },
+    { key: 'currency', label: 'מטבע' },
+    { key: 'buyDate', label: 'תאריך קנייה' },
+    { key: 'sellDate', label: 'תאריך מכירה' },
+    { key: 'durationDays', label: 'ימים' },
+    { key: 'buyAmount', label: 'סכום קנייה' },
+    { key: 'sellAmount', label: 'סכום מכירה' },
+    { key: 'totalFee', label: 'עמלות' },
+    { key: 'netPL', label: 'רווח/הפסד' },
+    { key: 'netPLPct', label: '%' },
+  ];
+  const filtered = applyFilter(state.trades, state.tradeFilter, (t) => [
+    t.ticker, t.name, t.currency, fmtDate(t.buyDate), fmtDate(t.sellDate),
+    t.durationDays, t.buyAmount, t.sellAmount, t.totalFee, t.netPL, t.netPLPct.toFixed(2)
+  ]);
+  const sorted = applySort(filtered, state.tradeSort.col, state.tradeSort.dir, tradeCellValue);
+
+  let h = '<table><thead><tr>';
+  for (const c of cols) {
+    const arrow = state.tradeSort.col === c.key ? `<span class="arrow">${state.tradeSort.dir === 'asc' ? '▲' : '▼'}</span>` : '';
+    h += `<th data-trade-col="${c.key}">${arrow}${c.label}</th>`;
+  }
+  h += '</tr></thead><tbody>';
+  if (sorted.length === 0) {
+    h += `<tr><td colspan="${cols.length}" style="text-align:center;color:var(--muted);padding:24px;">אין תוצאות</td></tr>`;
+  }
+  for (const t of sorted) {
+    h += `<tr>
+      <td>${escapeHtml(t.ticker)}</td>
+      <td>${escapeHtml(t.name)}</td>
+      <td>${escapeHtml(t.currency)}</td>
+      <td class="num">${fmtDate(t.buyDate)}</td>
+      <td class="num">${fmtDate(t.sellDate)}</td>
+      <td class="num">${t.durationDays}</td>
+      <td class="num">${fmtMoney(t.buyAmount, t.currency)}</td>
+      <td class="num">${fmtMoney(t.sellAmount, t.currency)}</td>
+      <td class="num">${fmtMoney(t.totalFee, t.currency)}</td>
+      <td class="num ${plClass(t.netPL)}">${fmtMoney(t.netPL, t.currency)}</td>
+      <td class="num ${plClass(t.netPL)}">${fmtPct(t.netPLPct)}</td>
+    </tr>`;
+  }
+  h += '</tbody></table>';
+  return h;
+}
+
+function divCellValue(d, col) {
+  switch (col) {
+    case 'ticker': return d.ticker;
+    case 'name': return d.name;
+    case 'currency': return d.currency;
+    case 'date': return d.date;
+    case 'amount': return d.amount;
+    default: return '';
+  }
+}
+
+function renderDividendsTable() {
+  const cols = [
+    { key: 'ticker', label: 'סימבול' },
+    { key: 'name', label: 'שם' },
+    { key: 'currency', label: 'מטבע' },
+    { key: 'date', label: 'תאריך' },
+    { key: 'amount', label: 'סכום' },
+  ];
+  const filtered = applyFilter(state.dividends, state.divFilter, (d) => [
+    d.ticker, d.name, d.currency, fmtDate(d.date), d.amount
+  ]);
+  const sorted = applySort(filtered, state.divSort.col, state.divSort.dir, divCellValue);
+
+  let h = '<table><thead><tr>';
+  for (const c of cols) {
+    const arrow = state.divSort.col === c.key ? `<span class="arrow">${state.divSort.dir === 'asc' ? '▲' : '▼'}</span>` : '';
+    h += `<th data-div-col="${c.key}">${arrow}${c.label}</th>`;
+  }
+  h += '</tr></thead><tbody>';
+  if (sorted.length === 0) {
+    h += `<tr><td colspan="${cols.length}" style="text-align:center;color:var(--muted);padding:24px;">אין תוצאות</td></tr>`;
+  }
+  for (const d of sorted) {
+    h += `<tr>
+      <td>${escapeHtml(d.ticker)}</td>
+      <td>${escapeHtml(d.name)}</td>
+      <td>${escapeHtml(d.currency)}</td>
+      <td class="num">${fmtDate(d.date)}</td>
+      <td class="num pos">${fmtMoney(d.amount, d.currency)}</td>
+    </tr>`;
+  }
+  h += '</tbody></table>';
+  return h;
+}
+
+function drawPnLChart() {
+  const canvas = document.getElementById('pnlChart');
+  if (!canvas) return;
+  const sorted = [...state.trades].sort((a, b) => a.sellDate - b.sellDate);
+  const points = sorted.map((t) => ({
+    x: t.sellDate.getTime(),
+    y: t.netPLPct,
+    ticker: t.ticker,
+    currency: t.currency,
+    netPL: t.netPL,
+    isWin: t.netPL >= 0,
+  }));
+  const bgColors = points.map((p) => p.isWin ? 'rgba(34, 197, 94, 0.75)' : 'rgba(239, 68, 68, 0.75)');
+  const borderColors = points.map((p) => p.isWin ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)');
+
+  if (state.charts.pnl) state.charts.pnl.destroy();
+  state.charts.pnl = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      datasets: [{
+        label: 'רווח/הפסד (%)',
+        data: points,
+        backgroundColor: bgColors,
+        borderColor: borderColors,
+        borderWidth: 1,
+        barThickness: 'flex',
+        maxBarThickness: 24,
+        minBarLength: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const p = items[0].raw;
+              return p.ticker + ' · ' + new Date(p.x).toLocaleDateString('he-IL');
+            },
+            label: (item) => {
+              const p = item.raw;
+              const sign = p.y >= 0 ? '+' : '';
+              return [
+                `תשואה: ${sign}${p.y.toFixed(2)}%`,
+                `רווח/הפסד: ${(p.netPL >= 0 ? '+' : '')}${p.netPL.toFixed(2)} ${p.currency}`,
+              ];
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'month', tooltipFormat: 'dd/MM/yyyy', displayFormats: { month: 'MM/yy', day: 'dd/MM' } },
+          ticks: { color: '#94a3b8' },
+          grid: { color: 'rgba(148,163,184,0.1)' },
+        },
+        y: {
+          ticks: { color: '#94a3b8', callback: (v) => v + '%' },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? 'rgba(148,163,184,0.5)' : 'rgba(148,163,184,0.1)',
+          },
+          title: { display: true, text: 'רווח/הפסד (%)', color: '#94a3b8' },
+        },
+      },
+    },
+  });
+}
+
+function drawWinRateChart() {
+  const canvas = document.getElementById('winRateChart');
+  if (!canvas) return;
+  const sorted = [...state.trades].sort((a, b) => a.sellDate - b.sellDate);
+  let wins = 0;
+  const points = sorted.map((t, i) => {
+    if (t.netPL > 0) wins++;
+    const rate = (wins / (i + 1)) * 100;
+    return { x: t.sellDate.getTime(), y: rate, ticker: t.ticker, n: i + 1 };
+  });
+
+  if (state.charts.winRate) state.charts.winRate.destroy();
+  if (points.length === 0) return;
+  state.charts.winRate = new Chart(canvas, {
+    type: 'line',
+    data: {
+      datasets: [{
+        label: 'אחוז ניצחון מצטבר',
+        data: points,
+        borderColor: 'rgba(56, 189, 248, 1)',
+        backgroundColor: 'rgba(56, 189, 248, 0.15)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.2,
+        pointRadius: 3,
+        pointBackgroundColor: 'rgba(56, 189, 248, 1)',
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const p = items[0].raw;
+              return `עסקה ${p.n} · ${p.ticker}`;
+            },
+            label: (item) => {
+              const p = item.raw;
+              return [
+                new Date(p.x).toLocaleDateString('he-IL'),
+                `אחוז ניצחון: ${p.y.toFixed(1)}%`,
+              ];
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'month', tooltipFormat: 'dd/MM/yyyy', displayFormats: { month: 'MM/yy', day: 'dd/MM' } },
+          ticks: { color: '#94a3b8' },
+          grid: { color: 'rgba(148,163,184,0.1)' },
+        },
+        y: {
+          min: 0,
+          max: 100,
+          ticks: { color: '#94a3b8', callback: (v) => v + '%' },
+          grid: {
+            color: (ctx) => ctx.tick.value === 50 ? 'rgba(148,163,184,0.4)' : 'rgba(148,163,184,0.1)',
+          },
+        },
+      },
+    },
+  });
+}
+
+function drawFeesChart(orderedCurrencies) {
+  const canvas = document.getElementById('feesChart');
+  if (!canvas) return;
+
+  // Collect every fee event from all trades
+  const events = [];
+  for (const t of state.trades) {
+    if (t.buyFee > 0) events.push({ date: t.buyDate, fee: t.buyFee, currency: t.currency });
+    if (t.sellFee > 0) events.push({ date: t.sellDate, fee: t.sellFee, currency: t.currency });
+  }
+  events.sort((a, b) => a.date - b.date);
+
+  const colors = {
+    USD: 'rgba(34, 197, 94, 1)',
+    ILS: 'rgba(56, 189, 248, 1)',
+    EUR: 'rgba(234, 179, 8, 1)',
+  };
+  const fillColors = {
+    USD: 'rgba(34, 197, 94, 0.1)',
+    ILS: 'rgba(56, 189, 248, 0.1)',
+    EUR: 'rgba(234, 179, 8, 0.1)',
+  };
+  const fallback = 'rgba(148, 163, 184, 1)';
+
+  const cumulative = {};
+  const series = {};
+  const presentCurrencies = orderedCurrencies.filter((c) =>
+    events.some((e) => e.currency === c)
+  );
+  for (const c of presentCurrencies) {
+    cumulative[c] = 0;
+    series[c] = [];
+  }
+
+  for (const e of events) {
+    if (!(e.currency in cumulative)) continue;
+    cumulative[e.currency] += e.fee;
+    series[e.currency].push({ x: e.date.getTime(), y: cumulative[e.currency] });
+  }
+
+  const datasets = presentCurrencies.map((c) => ({
+    label: `${CURRENCY_LABEL[c] || c} (${c})`,
+    data: series[c],
+    borderColor: colors[c] || fallback,
+    backgroundColor: fillColors[c] || 'rgba(148,163,184,0.1)',
+    borderWidth: 2,
+    tension: 0.1,
+    pointRadius: 2,
+    fill: false,
+    stepped: 'after',
+    currency: c,
+  }));
+
+  if (state.charts.fees) state.charts.fees.destroy();
+  if (datasets.length === 0) return;
+  state.charts.fees = new Chart(canvas, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      plugins: {
+        legend: { labels: { color: '#cbd5e1' } },
+        tooltip: {
+          callbacks: {
+            label: (item) => {
+              const c = item.dataset.currency;
+              return `${item.dataset.label}: ${fmtMoney(item.parsed.y, c)}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'month', tooltipFormat: 'dd/MM/yyyy', displayFormats: { month: 'MM/yy', day: 'dd/MM' } },
+          ticks: { color: '#94a3b8' },
+          grid: { color: 'rgba(148,163,184,0.1)' },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#94a3b8' },
+          grid: { color: 'rgba(148,163,184,0.1)' },
+          title: { display: true, text: 'עמלות מצטברות', color: '#94a3b8' },
+        },
+      },
+    },
+  });
+}
+
+// ============================================================
+// Wire up controls
+// ============================================================
+function loadTransactions(transactions) {
+  const { trades, dividends } = computeTrades(transactions);
+  state.rawTransactions = transactions;
+  state.trades = trades;
+  state.dividends = dividends;
+  state.tradeSort = { col: 'sellDate', dir: 'desc' };
+  state.divSort = { col: 'date', dir: 'desc' };
+  state.tradeFilter = '';
+  state.divFilter = '';
+  render();
+}
+
+document.getElementById('btnLoadDemo').addEventListener('click', () => {
+  loadTransactions(generateDemoData(25));
+});
+document.getElementById('btnClear').addEventListener('click', () => {
+  state.trades = [];
+  state.dividends = [];
+  state.rawTransactions = [];
+  destroyCharts();
+  render();
+});
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const rows = await loadXlsxFile(file);
+    loadTransactions(rows);
+  } catch (err) {
+    alert('שגיאה בטעינת הקובץ: ' + err.message);
+  }
+  e.target.value = '';
+});
+
+// Initial render
+render();
+</script>
+</body>
+</html>
