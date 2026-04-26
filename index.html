@@ -328,7 +328,7 @@ let state = {
   divSort: { col: 'date', dir: 'desc' },
   tradeFilter: '',
   divFilter: '',
-  charts: { pnl: null, winRate: null, fees: null },
+  charts: { pnl: null, winRate: null, fees: null, totalReturn: null },
 };
 
 function destroyCharts() {
@@ -638,6 +638,18 @@ function render() {
     ? feeTotals.map((d) => `<span class="neg">${fmtMoney(d.total, d.c)}</span>`).join(' · ')
     : '<span class="neutral">-</span>';
 
+  // Total return % per currency
+  const returnTotals = orderedCurrencies
+    .map((c) => {
+      const data = currencies.get(c);
+      if (!data || data.invested === 0) return null;
+      return { c, pct: (data.netPL / data.invested) * 100 };
+    })
+    .filter((r) => r !== null);
+  const returnHtml = returnTotals.length > 0
+    ? returnTotals.map((r) => `<span class="${plClass(r.pct)}">${r.c} ${fmtPct(r.pct)}</span>`).join(' · ')
+    : '<span class="neutral">-</span>';
+
   // Trade rate per 30 days, based on span of sell dates
   let tradeRate = 0;
   let rateLabel = '-';
@@ -709,10 +721,19 @@ function render() {
           <div class="value">${tradeRate > 0 ? tradeRate.toFixed(1) : '-'}</div>
           <div class="sub">${rateLabel}</div>
         </div>
+        <div class="stat-card">
+          <div class="label">תשואה כוללת באחוזים</div>
+          <div class="value" style="font-size:18px;line-height:1.4;">${returnHtml}</div>
+          <div class="sub">לכל מטבע בנפרד</div>
+        </div>
       </div></div>
       <div class="section">
         <div class="section-title">סיכום לפי מטבע</div>
         ${currencyCardsHtml}
+      </div>
+      <div class="section">
+        <div class="section-title">תשואה כוללת לאורך זמן (מצטבר)</div>
+        <div class="chart-wrap"><canvas id="totalReturnChart"></canvas></div>
       </div>
       <div class="section">
         <div class="section-title">רווח/הפסד באחוזים לפי תאריך מכירה</div>
@@ -791,6 +812,7 @@ function render() {
   drawPnLChart();
   drawWinRateChart();
   drawFeesChart(orderedCurrencies);
+  drawTotalReturnChart(orderedCurrencies);
 }
 
 function bindTradeHeaders() {
@@ -1093,6 +1115,80 @@ function drawWinRateChart() {
           grid: {
             color: (ctx) => ctx.tick.value === 50 ? 'rgba(148,163,184,0.4)' : 'rgba(148,163,184,0.1)',
           },
+        },
+      },
+    },
+  });
+}
+
+function drawTotalReturnChart(orderedCurrencies) {
+  const canvas = document.getElementById('totalReturnChart');
+  if (!canvas) return;
+
+  const sorted = [...state.trades].sort((a, b) => a.sellDate - b.sellDate);
+  const byCurrency = {};
+  for (const t of sorted) {
+    if (!byCurrency[t.currency]) byCurrency[t.currency] = { invested: 0, pl: 0, points: [] };
+    const c = byCurrency[t.currency];
+    c.invested += t.buyAmount;
+    c.pl += t.netPL;
+    const pct = c.invested > 0 ? (c.pl / c.invested) * 100 : 0;
+    c.points.push({ x: t.sellDate.getTime(), y: pct });
+  }
+
+  const colors = {
+    USD: 'rgba(34, 197, 94, 1)',
+    ILS: 'rgba(56, 189, 248, 1)',
+    EUR: 'rgba(234, 179, 8, 1)',
+  };
+  const fallback = 'rgba(148, 163, 184, 1)';
+  const present = orderedCurrencies.filter((c) => byCurrency[c]);
+
+  const datasets = present.map((c) => ({
+    label: `${CURRENCY_LABEL[c] || c} (${c})`,
+    data: byCurrency[c].points,
+    borderColor: colors[c] || fallback,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    tension: 0.2,
+    pointRadius: 3,
+    pointBackgroundColor: colors[c] || fallback,
+    fill: false,
+  }));
+
+  if (state.charts.totalReturn) state.charts.totalReturn.destroy();
+  if (datasets.length === 0) return;
+  state.charts.totalReturn = new Chart(canvas, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      plugins: {
+        legend: { labels: { color: '#cbd5e1' } },
+        tooltip: {
+          callbacks: {
+            label: (item) => {
+              const sign = item.parsed.y >= 0 ? '+' : '';
+              return `${item.dataset.label}: ${sign}${item.parsed.y.toFixed(2)}%`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'month', tooltipFormat: 'dd/MM/yyyy', displayFormats: { month: 'MM/yy', day: 'dd/MM' } },
+          ticks: { color: '#94a3b8' },
+          grid: { color: 'rgba(148,163,184,0.1)' },
+        },
+        y: {
+          ticks: { color: '#94a3b8', callback: (v) => v + '%' },
+          grid: {
+            color: (ctx) => ctx.tick.value === 0 ? 'rgba(148,163,184,0.5)' : 'rgba(148,163,184,0.1)',
+          },
+          title: { display: true, text: 'תשואה מצטברת (%)', color: '#94a3b8' },
         },
       },
     },
