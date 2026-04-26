@@ -622,33 +622,59 @@ function render() {
     if (!orderedCurrencies.includes(c)) orderedCurrencies.push(c);
   }
 
-  // Dividend totals per currency
-  const dividendTotals = orderedCurrencies
-    .map((c) => ({ c, total: currencies.get(c).dividends }))
-    .filter((d) => d.total > 0);
-  const dividendsHtml = dividendTotals.length > 0
-    ? dividendTotals.map((d) => `<span class="${plClass(d.total)}">${fmtMoney(d.total, d.c)}</span>`).join(' · ')
-    : '<span class="neutral">-</span>';
+  // Dividend cards per currency
+  const dividendCounts = {};
+  for (const d of state.dividends) {
+    dividendCounts[d.currency] = (dividendCounts[d.currency] || 0) + 1;
+  }
+  let dividendCardsHtml = '';
+  for (const c of orderedCurrencies) {
+    const total = currencies.get(c)?.dividends || 0;
+    if (total <= 0) continue;
+    const label = CURRENCY_LABEL[c] || c;
+    dividendCardsHtml += `<div class="stat-card">
+      <div class="label">דיבידנדים · ${label}</div>
+      <div class="value pos">${fmtMoney(total, c)}</div>
+      <div class="sub">${dividendCounts[c] || 0} תשלומים</div>
+    </div>`;
+  }
+  if (!dividendCardsHtml) {
+    dividendCardsHtml = `<div class="stat-card">
+      <div class="label">דיבידנדים</div>
+      <div class="value neutral">-</div>
+      <div class="sub">אין תשלומים</div>
+    </div>`;
+  }
 
-  // Fee totals per currency
-  const feeTotals = orderedCurrencies
-    .map((c) => ({ c, total: currencies.get(c).fees }))
-    .filter((d) => d.total > 0);
-  const feesHtml = feeTotals.length > 0
-    ? feeTotals.map((d) => `<span class="neg">${fmtMoney(d.total, d.c)}</span>`).join(' · ')
-    : '<span class="neutral">-</span>';
+  // Fee cards per currency
+  let feeCardsHtml = '';
+  for (const c of orderedCurrencies) {
+    const total = currencies.get(c)?.fees || 0;
+    if (total <= 0) continue;
+    const label = CURRENCY_LABEL[c] || c;
+    feeCardsHtml += `<div class="stat-card">
+      <div class="label">עמלות · ${label}</div>
+      <div class="value neg">${fmtMoney(total, c)}</div>
+      <div class="sub">קנייה + מכירה</div>
+    </div>`;
+  }
+  if (!feeCardsHtml) {
+    feeCardsHtml = `<div class="stat-card">
+      <div class="label">עמלות</div>
+      <div class="value neutral">-</div>
+    </div>`;
+  }
 
-  // Total return % per currency
-  const returnTotals = orderedCurrencies
-    .map((c) => {
-      const data = currencies.get(c);
-      if (!data || data.invested === 0) return null;
-      return { c, pct: (data.netPL / data.invested) * 100 };
-    })
-    .filter((r) => r !== null);
-  const returnHtml = returnTotals.length > 0
-    ? returnTotals.map((r) => `<span class="${plClass(r.pct)}">${r.c} ${fmtPct(r.pct)}</span>`).join(' · ')
-    : '<span class="neutral">-</span>';
+  // Total return %: sum of per-currency percentages
+  let totalReturnPct = 0;
+  let hasReturn = false;
+  for (const c of orderedCurrencies) {
+    const data = currencies.get(c);
+    if (data && data.invested > 0) {
+      totalReturnPct += (data.netPL / data.invested) * 100;
+      hasReturn = true;
+    }
+  }
 
   // Trade rate per 30 days, based on span of sell dates
   let tradeRate = 0;
@@ -723,8 +749,8 @@ function render() {
         </div>
         <div class="stat-card">
           <div class="label">תשואה כוללת באחוזים</div>
-          <div class="value" style="font-size:18px;line-height:1.4;">${returnHtml}</div>
-          <div class="sub">לכל מטבע בנפרד</div>
+          <div class="value ${hasReturn ? plClass(totalReturnPct) : 'neutral'}">${hasReturn ? fmtPct(totalReturnPct) : '-'}</div>
+          <div class="sub">סכום אחוזי התשואה מכל המטבעות</div>
         </div>
       </div></div>
       <div class="section">
@@ -754,11 +780,7 @@ function render() {
     <summary class="drop-section-title">💰 דיבידנדים</summary>
     <div class="drop-section-body">
       <div class="section"><div class="stats-grid">
-        <div class="stat-card">
-          <div class="label">סה"כ דיבידנדים</div>
-          <div class="value" style="font-size:18px;line-height:1.4;">${dividendsHtml}</div>
-          <div class="sub">${state.dividends.length} תשלומים</div>
-        </div>
+        ${dividendCardsHtml}
       </div></div>
       <div class="section">
         <div class="section-title">טבלת דיבידנדים</div>
@@ -775,11 +797,7 @@ function render() {
     <summary class="drop-section-title">💸 עמלות</summary>
     <div class="drop-section-body">
       <div class="section"><div class="stats-grid">
-        <div class="stat-card">
-          <div class="label">סה"כ עמלות ששולמו</div>
-          <div class="value" style="font-size:18px;line-height:1.4;">${feesHtml}</div>
-          <div class="sub">קנייה + מכירה</div>
-        </div>
+        ${feeCardsHtml}
       </div></div>
       <div class="section">
         <div class="section-title">עמלות מצטברות לאורך זמן</div>
@@ -1126,52 +1144,47 @@ function drawTotalReturnChart(orderedCurrencies) {
   if (!canvas) return;
 
   const sorted = [...state.trades].sort((a, b) => a.sellDate - b.sellDate);
-  const byCurrency = {};
+  const cum = {};
+  const points = [];
   for (const t of sorted) {
-    if (!byCurrency[t.currency]) byCurrency[t.currency] = { invested: 0, pl: 0, points: [] };
-    const c = byCurrency[t.currency];
-    c.invested += t.buyAmount;
-    c.pl += t.netPL;
-    const pct = c.invested > 0 ? (c.pl / c.invested) * 100 : 0;
-    c.points.push({ x: t.sellDate.getTime(), y: pct });
+    if (!cum[t.currency]) cum[t.currency] = { invested: 0, pl: 0 };
+    cum[t.currency].invested += t.buyAmount;
+    cum[t.currency].pl += t.netPL;
+    let sumPct = 0;
+    for (const c of Object.keys(cum)) {
+      if (cum[c].invested > 0) sumPct += (cum[c].pl / cum[c].invested) * 100;
+    }
+    points.push({ x: t.sellDate.getTime(), y: sumPct });
   }
 
-  const colors = {
-    USD: 'rgba(34, 197, 94, 1)',
-    ILS: 'rgba(56, 189, 248, 1)',
-    EUR: 'rgba(234, 179, 8, 1)',
-  };
-  const fallback = 'rgba(148, 163, 184, 1)';
-  const present = orderedCurrencies.filter((c) => byCurrency[c]);
-
-  const datasets = present.map((c) => ({
-    label: `${CURRENCY_LABEL[c] || c} (${c})`,
-    data: byCurrency[c].points,
-    borderColor: colors[c] || fallback,
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    tension: 0.2,
-    pointRadius: 3,
-    pointBackgroundColor: colors[c] || fallback,
-    fill: false,
-  }));
-
   if (state.charts.totalReturn) state.charts.totalReturn.destroy();
-  if (datasets.length === 0) return;
+  if (points.length === 0) return;
   state.charts.totalReturn = new Chart(canvas, {
     type: 'line',
-    data: { datasets },
+    data: {
+      datasets: [{
+        label: 'תשואה כוללת מצטברת',
+        data: points,
+        borderColor: 'rgba(56, 189, 248, 1)',
+        backgroundColor: 'rgba(56, 189, 248, 0.15)',
+        borderWidth: 2,
+        tension: 0.2,
+        pointRadius: 3,
+        pointBackgroundColor: 'rgba(56, 189, 248, 1)',
+        fill: true,
+      }],
+    },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       parsing: false,
       plugins: {
-        legend: { labels: { color: '#cbd5e1' } },
+        legend: { display: false },
         tooltip: {
           callbacks: {
             label: (item) => {
               const sign = item.parsed.y >= 0 ? '+' : '';
-              return `${item.dataset.label}: ${sign}${item.parsed.y.toFixed(2)}%`;
+              return `תשואה כוללת: ${sign}${item.parsed.y.toFixed(2)}%`;
             },
           },
         },
@@ -1188,7 +1201,7 @@ function drawTotalReturnChart(orderedCurrencies) {
           grid: {
             color: (ctx) => ctx.tick.value === 0 ? 'rgba(148,163,184,0.5)' : 'rgba(148,163,184,0.1)',
           },
-          title: { display: true, text: 'תשואה מצטברת (%)', color: '#94a3b8' },
+          title: { display: true, text: 'תשואה כוללת (%)', color: '#94a3b8' },
         },
       },
     },
